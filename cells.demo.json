@@ -1,0 +1,1 @@
+[{"name": "scripted", "kind": "scripted", "transcript": "scripted", "system_prompt": "Work only with the provided tools. Use series_stats for aggregate questions instead of eyeballing rows. One tool call may be wrong: read TOOL_ERROR text and adjust. Always end by calling finish with the required answer object.", "parallel_tools": true}]

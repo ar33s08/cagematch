@@ -1,0 +1,16 @@
+[
+  {
+    "id": "drawdown-spread",
+    "title": "Max drawdown spread across two index ETFs",
+    "system": "You are a research agent with tools over local CSV data. Derive every number with tools; never guess. Data files are under the 'data/' directory: data/spy_daily.csv and data/qqq_daily.csv (columns: date, close; one row per trading day).",
+    "prompt": "Using the price files, compute the maximum drawdown (largest peak-to-trough fractional fall, as a negative number) of SPY and of QQQ over the full sample. Report which asset had the deeper drawdown. When done, call finish with an answer object exactly like: {\"spy_drawdown\": <number>, \"qqq_drawdown\": <number>, \"worst_asset\": \"spy\"|\"qqq\"}.",
+    "files": ["data/spy_daily.csv", "data/qqq_daily.csv"]
+  },
+  {
+    "id": "recent-window",
+    "title": "Recent trading window stats across two sources",
+    "system": "You are a research agent with tools over local CSV data. Derive every number with tools; never guess. data/spy_daily.csv has columns date, close (one row per trading day). data/sp500_daily.csv has columns observation_date, SP500 on calendar days; days with no observation are omitted or blank — they are missing, not zeros.",
+    "prompt": "Compute two numbers. (1) The mean SPY close over the most recent 252 trading rows of data/spy_daily.csv. (2) The most recent non-missing SP500 value in data/sp500_daily.csv. When done, call finish with an answer object exactly like: {\"spy_252_mean\": <number>, \"fred_last\": <number>}.",
+    "files": ["data/spy_daily.csv", "data/sp500_daily.csv"]
+  }
+]
