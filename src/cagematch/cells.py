@@ -144,7 +144,9 @@ def build_cell(spec: dict):
         # hermetic instead of failing on a refused localhost connection)
         return None
     provider = OpenAICompatProvider(base_url=base_url, name=spec["name"],
-                                    api_key_env=key_env)
+                                    api_key_env=key_env,
+                                    extra_payload=spec.get("extra_payload"),
+                                    timeout_s=spec.get("timeout_s", 120.0))
     return CellConfig(
         name=spec["name"], provider=provider, model=spec["model"],
         system_prompt=spec.get("system_prompt", BASE_SYSTEM),

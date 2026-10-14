@@ -94,11 +94,17 @@ class OpenAICompatProvider:
     """
 
     def __init__(self, base_url: str, name: str = "cell", api_key_env: str | None = None,
-                 timeout_s: float = 120.0):
+                 timeout_s: float = 120.0, extra_payload: dict | None = None):
         self.base_url = base_url.rstrip("/")
         self.name = name
         self.api_key_env = api_key_env
         self.timeout_s = timeout_s
+        # per-provider quirks that ride in the request body, e.g. vLLM thinking
+        # models need {"chat_template_kwargs": {"enable_thinking": false}} or
+        # every call spends the whole budget on reasoning (60s+ per call, and
+        # content comes back null). Quirks belong in the cell config, not in
+        # loop code.
+        self.extra_payload = dict(extra_payload or {})
 
     @property
     def url(self) -> str:
@@ -120,6 +126,7 @@ class OpenAICompatProvider:
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        body.update(self.extra_payload)
         if tools:
             body["tools"] = tools
             body["tool_choice"] = "auto"

@@ -50,15 +50,17 @@ TOOLS_SCHEMA = [
         "function": {
             "name": "series_stats",
             "description": "Compute stats over a numeric CSV column. stat is one of: "
-                           "count, sum, mean, min, max, first, last, max_drawdown. "
-                           "max_drawdown = largest peak-to-trough fractional fall "
-                           "(negative number) over rows in file order.",
+                           "count, sum, mean, min, max, first, last, max_drawdown, "
+                           "tail_mean. max_drawdown = largest peak-to-trough fractional "
+                           "fall (negative number) over rows in file order. tail_mean "
+                           "needs n = mean over the last n numeric rows.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "file": {"type": "string"},
                     "column": {"type": "string"},
                     "stat": {"type": "string"},
+                    "n": {"type": "integer", "description": "required for tail_mean"},
                 },
                 "required": ["file", "column", "stat"],
             },
@@ -201,14 +203,21 @@ def make_tool_registry(data_dir: Path, ws_dir: Path):
         for row in rows:
             writer.writerow(row)
         full.write_text(buf.getvalue(), encoding="utf-8")
-        return {"written_rows": len(rows), "path": str(full.relative_to(ws_dir))}
+        return {"written_rows": len(rows), "path": str(full.relative_to(ws_dir.resolve()))}
 
-    def series_stats(file: str, column: str, stat: str) -> dict:
+    def series_stats(file: str, column: str, stat: str, n: int | None = None) -> dict:
         if file.startswith("ws:"):
             path = _resolve_ws_path(file[3:], ws_dir)
         else:
             path = _resolve_data_path(file, data_dir)
         values = _column(path, column)
+
+        def tail_mean():
+            if not n or int(n) <= 0:
+                raise ToolError("tail_mean requires positive n")
+            k = min(int(n), len(values))
+            return sum(values[-k:]) / k
+
         stats = {
             "count": lambda: float(len(values)),
             "sum": lambda: sum(values),
@@ -218,6 +227,7 @@ def make_tool_registry(data_dir: Path, ws_dir: Path):
             "first": lambda: values[0],
             "last": lambda: values[-1],
             "max_drawdown": lambda: _max_drawdown(values),
+            "tail_mean": tail_mean,
         }
         if stat not in stats:
             raise ToolError(f"unknown stat '{stat}'; choose from {sorted(stats)}")

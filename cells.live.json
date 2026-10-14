@@ -1,0 +1,30 @@
+[
+  {
+    "name": "spark-qwen",
+    "kind": "live",
+    "base_url_env": "SPARK_BASE_URL",
+    "base_url_default": "",
+    "api_key_env": null,
+    "model": "qwen3.8-flash-next",
+    "extra_payload": {"chat_template_kwargs": {"enable_thinking": false}},
+    "timeout_s": 300,
+    "system_prompt": "Work only with the provided tools. Use series_stats for aggregate questions instead of eyeballing rows. One tool call may be wrong: read TOOL_ERROR text and adjust. Always end by calling finish with the required answer object.",
+    "parallel_tools": true,
+    "max_steps": 12,
+    "max_cost_usd": 1.0
+  },
+  {
+    "name": "spark-qwen-serial",
+    "kind": "live",
+    "base_url_env": "SPARK_BASE_URL",
+    "base_url_default": "",
+    "api_key_env": null,
+    "model": "qwen3.8-flash-next",
+    "extra_payload": {"chat_template_kwargs": {"enable_thinking": false}},
+    "timeout_s": 300,
+    "system_prompt": "Work only with the provided tools. Use series_stats for aggregate questions instead of eyeballing rows. One tool call may be wrong: read TOOL_ERROR text and adjust. Always end by calling finish with the required answer object. Issue exactly one tool call per turn.",
+    "parallel_tools": false,
+    "max_steps": 16,
+    "max_cost_usd": 1.0
+  }
+]

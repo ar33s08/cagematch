@@ -97,23 +97,31 @@ def run_task(task: dict, cell: CellConfig, store: RunStore, data_dir, ws_dir,
         steps += 1
         spent += (completion.prompt_tokens / 1e6) * cell.pricing.get("prompt", 0.0)
         spent += (completion.completion_tokens / 1e6) * cell.pricing.get("completion", 0.0)
-        store.append(run_id, {
-            "kind": "completion", "step": steps, "cost_usd": spent,
-            "content": completion.content,
-            "reasoning_present": completion.reasoning is not None,
-            "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments}
-                           for c in completion.tool_calls],
-            "prompt_tokens": completion.prompt_tokens,
-            "completion_tokens": completion.completion_tokens,
-            "latency_ms": round(completion.latency_ms, 1),
-        })
+        calls = list(completion.tool_calls)
+        if not cell.parallel_tools:
+            calls = calls[:1]  # serial policy: dispatch one tool per turn
+        # the completion event records what was DISPATCHED, not merely proposed:
+        # a serial cell's dropped extra calls were never executed and must not
+        # be certified by replay (found by the first live run: replay rightly
+        # refused to certify calls that had no stored result because policy
+        # dropped them before dispatch).
+        store.append(run_id, {"kind": "completion", "step": steps, "cost_usd": spent,
+                              "content": completion.content,
+                              "reasoning_present": completion.reasoning is not None,
+                              "tool_calls": [{"id": c.id, "name": c.name,
+                                              "arguments": c.arguments}
+                                             for c in calls],
+                              "proposed_n": len(completion.tool_calls),
+                              "prompt_tokens": completion.prompt_tokens,
+                              "completion_tokens": completion.completion_tokens,
+                              "latency_ms": round(completion.latency_ms, 1)})
 
         assistant_msg = {"role": "assistant", "content": completion.content}
-        if completion.tool_calls:
+        if calls:
             assistant_msg["tool_calls"] = [
                 {"id": c.id, "type": "function",
                  "function": {"name": c.name, "arguments": json.dumps(c.arguments)}}
-                for c in completion.tool_calls
+                for c in calls
             ]
         messages.append(assistant_msg)
 
@@ -122,10 +130,10 @@ def run_task(task: dict, cell: CellConfig, store: RunStore, data_dir, ws_dir,
             if completion.content:
                 detail = f"model answered in prose without finish(): {completion.content[:200]}"
             break
+        if not calls and completion.tool_calls:
+            detail = "policy dispatched zero proposed calls"
+            break
 
-        calls = list(completion.tool_calls)
-        if not cell.parallel_tools:
-            calls = calls[:1]  # serial policy: dispatch one tool per turn
         finished_here = None
         for call in calls:
             fn = registry.get(call.name)
