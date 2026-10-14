@@ -79,12 +79,59 @@ laptop, in CI, and on a trading floor with partial credentials.
   calendar series with missing days; punishes cells that treat blanks as zeros
   or read the wrong column.
 
+## Live runs
+
+First real derby: `qwen3.8-flash-next` served by vLLM on a DGX Spark,
+self-hosted, zero API cost — same task suite, two loop policies.
+(`cells.live.json`; endpoints and quirks are config: vLLM thinking models need
+`chat_template_kwargs: {enable_thinking: false}` or every call spends its
+budget reasoning and returns `content: null`.)
+
+| task | cell | result | steps | replay |
+|---|---|---|---|---|
+| drawdown-spread | qwen-parallel | PASS | 2 | 2/2 |
+| recent-window | qwen-parallel | PASS | 11 | 13/13 |
+| drawdown-spread | qwen-serial | budget_steps | 16 | 16/16 |
+| recent-window | qwen-serial | PASS | 6 | 5/5 |
+
+Same model, same task, two outcomes — and the interesting one is the failure.
+The serial cell computed **both correct drawdowns by step 2**, then refused to
+commit: it spent 14 more steps re-counting rows, pulling min/max, and paging
+raw rows trying to find the peak by eye, and died at the step budget never
+having called `finish()`. The parallel cell did the same task in 2 steps. That
+is the point of measuring harness policies, not just models: the "verify
+everything" loop is a property of the loop, and one cell's success tells you
+nothing about the next cell's failure mode.
+
+The first live run (before fixes) found three real bugs in this harness, all
+closed with regression tests:
+
+1. **Replay demanded results for calls that were proposed but never
+   dispatched.** The serial policy truncates proposals to one dispatch per
+   turn; the trace had recorded proposals as if they ran, so replay refused to
+   certify honest runs. The completion event now records *dispatched* calls
+   (proposed count kept for audit). The evidence lock was right; the log's
+   claim was wrong — exactly the class of bug this project exists to catch.
+2. **`write_data_csv` echoed an absolute temp path into the certified
+   result**, so replay under a differently-resolved workspace root diverged
+   spuriously. Results must contain only stable, relative facts.
+3. **A tool-surface gap masqueraded as a model failure:** `recent-window`
+   (mean of last 252 rows) forced the model to page 100-row blocks and do
+   mental arithmetic — a step-budget death that measured paging stamina, not
+   judgment. `series_stats` gained `tail_mean(n)`. Tool-surface gaps are eval
+   bugs, not model findings; fix the eval before blaming the cell.
+
+Per-call latency on the contended GPU ranged 0.5s to 90s+; that variance, not
+the model, caused the first run's timeouts — captured honestly as
+`provider_error` findings in the trace rather than retried into invisibility.
+
 ## Honest limits
 
 - **The CI gate runs a test double.** `scripted` proves the plumbing — loop,
   budgets, trace chain, replay, scorer — end to end with no network. It does
   not prove model intelligence, and the gate output says so on every run
-  (`simulated_test_double=yes`).
+  (`simulated_test_double=yes`). Live results come from `cells.live.json`
+  runs, reported above, single-sample.
 - **The task suite is small (2 tasks).** It is an architecture you extend with
   your own tasks JSON, not a leaderboard. Two tasks, honestly measured and
   replay-certified, is a better claim than twenty that aren't.
